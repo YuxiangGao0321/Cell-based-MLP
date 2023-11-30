@@ -4,3 +4,7 @@ __pycache__
 build*
 dist
 /.vscode
+# MY
+**/figs/
+**/Tasks/
+my_job/

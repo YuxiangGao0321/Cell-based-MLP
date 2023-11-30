@@ -43,6 +43,7 @@
 #include <stdint.h>
 #include <string>
 #include <vector>
+#include <stdio.h>
 
 TCNN_NAMESPACE_BEGIN
 
@@ -135,7 +136,8 @@ __global__ void kernel_grid(
 	const uint32_t num_grid_features,
 	const uint32_t* hashmap_offset_table,
 	const uint32_t base_resolution,
-	const float log2_per_level_scale,
+	// const float log2_per_level_scale,
+	const float per_level_scale,
 	const float quantize_threshold,
 	float max_level,
 	const float* __restrict__ max_level_gpu,
@@ -146,6 +148,8 @@ __global__ void kernel_grid(
 	T* __restrict__ encoded_positions,
 	float* __restrict__ dy_dx
 ) {
+
+
 	const uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= num_elements) return;
 
@@ -179,8 +183,9 @@ __global__ void kernel_grid(
 	grid += hashmap_offset_table[level] * N_FEATURES_PER_LEVEL;
 	const uint32_t hashmap_size = hashmap_offset_table[level + 1] - hashmap_offset_table[level];
 
-	const float scale = exp2f(level * log2_per_level_scale) * base_resolution - 1.0f;
-	const uint32_t grid_resolution = ((uint32_t)ceil(scale) + 1);
+	// const float scale = floorf(exp2f(level * log2_per_level_scale) * base_resolution - 1.0f);
+	const float scale = floorf(pow(per_level_scale, level)* base_resolution - 1.0f);
+	const uint32_t grid_resolution = (uint32_t)scale + 1;
 
 	float pos[N_POS_DIMS];
 	float pos_derivative[N_POS_DIMS];
@@ -197,6 +202,13 @@ __global__ void kernel_grid(
 			pos_fract(positions_in(dim, i), &pos[dim], &pos_derivative[dim], &pos_grid[dim], scale, smoothstep, smoothstep_derivative);
 		}
 	}
+
+	// if (i == 1){
+	// 	const int hashmap_size_print = (int)hashmap_size;
+	// 	const int grid_resolution_print = (int)grid_resolution;
+	// 	const float scale_print = pow(per_level_scale, level)* base_resolution - 1.0f;
+	// 	printf("scale: %f (%f), hashmap_size: %i, grid_resolution: %i \n",scale,scale_print, hashmap_size_print, grid_resolution_print);		
+	// }
 
 	auto grid_val = [&](const uint32_t local_pos[N_POS_DIMS]) {
 		uint32_t index = grid_index<N_POS_DIMS, N_FEATURES_PER_LEVEL>(grid_type, 0, hashmap_size, grid_resolution, local_pos);
@@ -309,7 +321,8 @@ __global__ void kernel_grid_backward(
 	const uint32_t num_grid_features,
 	const uint32_t* hashmap_offset_table,
 	const uint32_t base_resolution,
-	const float log2_per_level_scale,
+	// const float log2_per_level_scale,
+	const float per_level_scale,
 	float max_level,
 	const float* __restrict__ max_level_gpu,
 	const bool stochastic_interpolation,
@@ -338,8 +351,9 @@ __global__ void kernel_grid_backward(
 	grid_gradient += hashmap_offset_table[level] * N_FEATURES_PER_LEVEL;
 	const uint32_t hashmap_size = hashmap_offset_table[level + 1] - hashmap_offset_table[level];
 
-	const float scale = exp2f(level * log2_per_level_scale) * base_resolution - 1.0f;
-	const uint32_t grid_resolution = ((uint32_t)ceil(scale) + 1);
+	// const float scale = floorf(exp2f(level * log2_per_level_scale) * base_resolution - 1.0f);
+	const float scale = floorf(pow(per_level_scale, level)* base_resolution - 1.0f);
+	const uint32_t grid_resolution = (uint32_t)scale + 1;
 
 	auto add_grid_gradient = [&](const uint32_t local_pos[N_POS_DIMS], const vector_t<T, N_FEATURES_PER_THREAD>& grad, const float weight) {
 		uint32_t index = grid_index<N_POS_DIMS, N_FEATURES_PER_LEVEL>(grid_type, feature, hashmap_size, grid_resolution, local_pos);
@@ -493,7 +507,8 @@ __global__ void kernel_grid_backward_input_backward_grid(
 	const uint32_t num_grid_features,
 	const uint32_t* hashmap_offset_table,
 	const uint32_t base_resolution,
-	const float log2_per_level_scale,
+	// const float log2_per_level_scale,
+	const float per_level_scale,
 	float max_level,
 	const float* __restrict__ max_level_gpu,
 	// const bool stochastic_interpolation, // TODO: is this needed?
@@ -525,8 +540,9 @@ __global__ void kernel_grid_backward_input_backward_grid(
 	grid_gradient += hashmap_offset_table[level] * N_FEATURES_PER_LEVEL;
 	const uint32_t hashmap_size = hashmap_offset_table[level + 1] - hashmap_offset_table[level];
 
-	const float scale = exp2f(level * log2_per_level_scale) * base_resolution - 1.0f;
-	const uint32_t grid_resolution = ((uint32_t)ceil(scale) + 1);
+	// const float scale = floorf(exp2f(level * log2_per_level_scale) * base_resolution - 1.0f);
+	const float scale = floorf(pow(per_level_scale, level)* base_resolution - 1.0f);
+	const uint32_t grid_resolution = (uint32_t)scale + 1;
 
 	auto add_grid_gradient = [&](const uint32_t local_pos[N_POS_DIMS], const vector_t<T, N_FEATURES_PER_THREAD>& grad, const float weight) {
 		uint32_t index = grid_index<N_POS_DIMS, N_FEATURES_PER_LEVEL>(grid_type, feature, hashmap_size, grid_resolution, local_pos);
@@ -616,7 +632,8 @@ __global__ void kernel_grid_backward_input_backward_input(
 	const uint32_t num_grid_features,
 	const uint32_t* hashmap_offset_table,
 	const uint32_t base_resolution,
-	const float log2_per_level_scale,
+	// const float log2_per_level_scale,
+	const float per_level_scale,
 	const float quantize_threshold,
 	float max_level,
 	const float* __restrict__ max_level_gpu,
@@ -649,8 +666,9 @@ __global__ void kernel_grid_backward_input_backward_input(
 	grid += hashmap_offset_table[level] * N_FEATURES_PER_LEVEL;
 	const uint32_t hashmap_size = hashmap_offset_table[level + 1] - hashmap_offset_table[level];
 
-	const float scale = exp2f(level * log2_per_level_scale) * base_resolution - 1.0f;
-	const uint32_t grid_resolution = ((uint32_t)ceil(scale) + 1);
+	// const float scale = floorf(exp2f(level * log2_per_level_scale) * base_resolution - 1.0f);
+	const float scale = floorf(pow(per_level_scale, level)* base_resolution - 1.0f);
+	const uint32_t grid_resolution = (uint32_t)scale + 1;
 
 	float pos[N_POS_DIMS];
 	float pos_derivative[N_POS_DIMS];
@@ -886,15 +904,17 @@ public:
 		uint32_t offset = 0;
 
 		m_hashmap_offsets_table_cpu.resize(m_n_levels + 1);
-
 		for (uint32_t i = 0; i < m_n_levels; ++i) {
 			// Compute dense params required for the given level
-			const float scale = exp2f(i * std::log2(per_level_scale)) * base_resolution - 1.0f;
-			const uint32_t resolution = (uint32_t)(ceilf(scale)) + 1;
+			// const float scale = floorf(exp2f(i * std::log2(per_level_scale)) * base_resolution - 1.0f);
+			// const uint32_t resolution = (uint32_t)(ceilf(scale)) + 1;
+			const float scale = floorf(std::pow(per_level_scale, i) * base_resolution - 1.0f);
+			const uint32_t resolution = (uint32_t)scale + 1;
 
 			uint32_t max_params = std::numeric_limits<uint32_t>::max()/2;
 			uint32_t params_in_level = std::pow((float)resolution, N_POS_DIMS) > (float)max_params ? max_params : powi(resolution, N_POS_DIMS);
 
+			// std::cout << "GridEncoding at level " << i << ": scale="<< scale <<" resolution=" << resolution << " params_in_level=" << params_in_level << std::endl;
 			// Make sure memory accesses will be aligned
 			params_in_level = next_multiple(params_in_level, 8u);
 
@@ -913,9 +933,11 @@ public:
 			m_hashmap_offsets_table_cpu[i] = offset;
 			offset += params_in_level;
 
-#ifdef TCNN_VERBOSE_MEMORY_ALLOCS
-			std::cout << "GridEncoding at level " << i << ": resolution=" << resolution << " params_in_level=" << params_in_level << std::endl;
-#endif
+// #ifdef TCNN_VERBOSE_MEMORY_ALLOCS
+			// const float scale_print = std::pow(per_level_scale, i) * base_resolution - 1.0f;
+			// std::cout << "GridEncoding at level " << i << ": scale="<< scale <<" resolution=" << resolution << " params_in_level=" << params_in_level << std::endl;
+			// printf("scale = %f (%f) \n", scale, scale_print);
+// #endif
 		}
 
 		m_hashmap_offsets_table_cpu[m_n_levels] = offset;
@@ -982,7 +1004,8 @@ public:
 			m_n_features,
 			m_hashmap_offsets_table.data(),
 			m_base_resolution,
-			std::log2(m_per_level_scale),
+			// std::log2(m_per_level_scale),
+			m_per_level_scale,
 			this->m_quantize_threshold,
 			this->m_max_level,
 			this->m_max_level_gpu,
@@ -1070,7 +1093,8 @@ public:
 				m_n_features,
 				m_hashmap_offsets_table.data(),
 				m_base_resolution,
-				std::log2(m_per_level_scale),
+				// std::log2(m_per_level_scale),
+				m_per_level_scale,
 				this->m_max_level,
 				this->m_max_level_gpu,
 				m_stochastic_interpolation,
@@ -1165,7 +1189,8 @@ public:
 				m_n_features,
 				m_hashmap_offsets_table.data(),
 				m_base_resolution,
-				std::log2(m_per_level_scale),
+				// std::log2(m_per_level_scale),
+				m_per_level_scale,
 				this->m_max_level,
 				this->m_max_level_gpu,
 				m_interpolation_type,
@@ -1211,7 +1236,8 @@ public:
 				m_n_features,
 				m_hashmap_offsets_table.data(),
 				m_base_resolution,
-				std::log2(m_per_level_scale),
+				// std::log2(m_per_level_scale),
+				m_per_level_scale,
 				this->m_quantize_threshold,
 				this->m_max_level,
 				this->m_max_level_gpu,

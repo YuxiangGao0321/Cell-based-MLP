@@ -75,11 +75,12 @@ def plot_diff(x,ground_truth,field_name,f_name,f_path = "figs",eps = 1e-4,ifsave
     from matplotlib import cm
     from matplotlib import pyplot as plt
     from matplotlib import colors
-    plt.rcParams.update({'font.size': 15})
+    from matplotlib.ticker import ScalarFormatter
+    plt.rcParams.update({'font.size': 17})
     resolution = x.shape[0]
     xmin,ymin = 0,0
     xmax,ymax = L,L
-    fig = plt.figure(figsize=(15,4))
+    fig = plt.figure(figsize=(14,4))
 
     plt.subplot(131)
     # fmax = float(np.format_float_positional(x.max(),precision = 3,unique=False, fractional=False, trim='k'))
@@ -107,7 +108,7 @@ def plot_diff(x,ground_truth,field_name,f_name,f_path = "figs",eps = 1e-4,ifsave
     vmin=fmin,vmax=fmax)#,cmap = cm.binary)
     plt.xticks([0,resolution],[xmin,xmax])
     plt.yticks([0,resolution],[ymin,ymax])
-    plt.title("ground_truth")
+    plt.title("Real solution")
     plt.colorbar(ticks=ct)
     # plt.axis('off')
 
@@ -115,8 +116,9 @@ def plot_diff(x,ground_truth,field_name,f_name,f_path = "figs",eps = 1e-4,ifsave
     plt.subplot(133)
     diff = x - ground_truth
     # rmse = float(np.format_float_positional(my_rmse(x, ground_truth),precision = 4,unique=False, fractional=False, trim='k'))
-    nrmse = float(np.format_float_positional(my_relativeL2(x, ground_truth),precision = 4,
-        unique=False, fractional=False, trim='k'))
+    # nrmse = float(np.format_float_positional(my_relativeL2(x, ground_truth),precision = 4,
+    #     unique=False, fractional=False, trim='k'))
+    nrmse = my_relativeL2(x, ground_truth)
     fmax = float(np.format_float_positional(diff.max(),precision = 3,unique=False, fractional=False, trim='k'))
     fmin = float(np.format_float_positional(diff.min(),precision = 3,unique=False, fractional=False, trim='k'))
     if fmin<-eps and fmax>eps:
@@ -129,8 +131,13 @@ def plot_diff(x,ground_truth,field_name,f_name,f_path = "figs",eps = 1e-4,ifsave
     # plt.imshow(f_plot,origin = 'lower',interpolation = None)
     plt.xticks([0,resolution],[xmin,xmax])
     plt.yticks([0,resolution],[ymin,ymax])
-    plt.title("{} - real\n(NRMSE: {})".format(field_name,nrmse))
-    plt.colorbar(ticks=ct)
+
+    # plt.title("{} - Real\n(NRMSE: {:.2e})".format(field_name,nrmse))
+    plt.title("NRMSE: {:.2e}\n{} - Real".format(nrmse,field_name))
+    color_bar = plt.colorbar(ticks=ct)
+    formatter = ScalarFormatter(useMathText=True)
+    formatter.set_powerlimits((0, 0))
+    color_bar.ax.yaxis.set_major_formatter(formatter)
     plt.axis('off')
     fig.tight_layout()
     if ifsave:

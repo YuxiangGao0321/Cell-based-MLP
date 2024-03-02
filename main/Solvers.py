@@ -25,11 +25,32 @@ class Solver:
         n01 = torch.tensor([field_min,field_max])
         n10 = torch.tensor([field_max,field_min])
         n11 = torch.tensor([field_max,field_max])
-        X_bot = random_points_1D(int(batch_size_BC/4),n00,n10)
-        X_left = random_points_1D(int(batch_size_BC/4),n00,n01)
-        X_right = random_points_1D(int(batch_size_BC/4),n10,n11)
-        X_top = random_points_1D(int(batch_size_BC/4),n01,n11)
+        X_bot = random_points_1D(int(batch_size_BC),n00,n10)
+        X_left = random_points_1D(int(batch_size_BC),n00,n01)
+        X_right = random_points_1D(int(batch_size_BC),n10,n11)
+        X_top = random_points_1D(int(batch_size_BC),n01,n11)
         X_boundaries = torch.cat((X_bot,X_left,X_top,X_right), dim = 0)
+        return X_boundaries
+    
+    def sample_boundaries(self,boundary_name_list,n_points_per_boundary,field_min = 0, field_max = 1):
+        n00 = torch.tensor([field_min,field_min])
+        n01 = torch.tensor([field_min,field_max])
+        n10 = torch.tensor([field_max,field_min])
+        n11 = torch.tensor([field_max,field_max])
+        X_boundaries = []
+        for name in boundary_name_list:
+            if "bottom" in name:
+                X = random_points_1D(n_points_per_boundary,n00,n10)
+            elif "left" in name:
+                X = random_points_1D(n_points_per_boundary,n00,n01)
+            elif "right" in name:
+                X = random_points_1D(n_points_per_boundary,n10,n11)
+            elif "top" in name:
+                X = random_points_1D(n_points_per_boundary,n01,n11)
+            else:
+                raise NotImplementedError
+            X_boundaries.append(X)
+        X_boundaries = torch.cat(X_boundaries, dim = 0)
         return X_boundaries
     
     def sample_periodic_boundary(self,batch_size_BC,field_min = 0, field_max = 1):
@@ -121,9 +142,11 @@ class PINN(Solver):
         self.X_field = self.generate_grid_points(501)
         self.u_real = self.get_real_solution(self.X_field)
     
-    def train_lbfgs(self):
+    def train_lbfgs(self,boundary_name_list = ["left","bottom","right","top"]):
         batch_size_BC = self.config['training']["boundary_batch"]
-        X_boundaries = self.sample_all_boundary(batch_size_BC).to(self.device)
+        n_points_per_boundary = int(batch_size_BC/len(boundary_name_list))
+        # X_boundaries = self.sample_all_boundary(batch_size_BC).to(self.device)
+        X_boundaries = self.sample_boundaries(boundary_name_list,n_points_per_boundary).to(self.device)
         batch_size = self.config['training']["interior_batch"]
         # X_I = torch.rand([batch_size, 2],dtype=torch.float32, device = self.device)
 
@@ -184,9 +207,11 @@ class PINN(Solver):
                 for _ in optimizer.param_groups:
                     _['lr'] = _['lr'] * gamma           
 
-    def train_adam(self):
+    def train_adam(self,boundary_name_list = ["left","bottom","right","top"]):
         batch_size_BC = self.config['training']["boundary_batch"]
-        X_boundaries = self.sample_all_boundary(batch_size_BC).to(self.device)
+        n_points_per_boundary = int(batch_size_BC/len(boundary_name_list))
+        # X_boundaries = self.sample_all_boundary(batch_size_BC).to(self.device)
+        X_boundaries = self.sample_boundaries(boundary_name_list,n_points_per_boundary).to(self.device)
         batch_size = self.config['training']["interior_batch"]
         X_I = torch.rand([batch_size, 2],dtype=torch.float32, device = self.device)
 
@@ -271,9 +296,11 @@ class PINN_energy(Solver):
         self.X_field = self.generate_grid_points(501)
         self.u_real = self.get_real_solution(self.X_field)
     
-    def train_lbfgs(self):
+    def train_lbfgs(self,boundary_name_list = ["left","bottom","right","top"]):
         batch_size_BC = self.config['training']["boundary_batch"]
-        X_boundaries = self.sample_all_boundary(batch_size_BC).to(self.device)
+        n_points_per_boundary = int(batch_size_BC/len(boundary_name_list))
+        # X_boundaries = self.sample_all_boundary(batch_size_BC).to(self.device)
+        X_boundaries = self.sample_boundaries(boundary_name_list,n_points_per_boundary).to(self.device)
         batch_size = self.config['training']["interior_batch"]
         # X_I = torch.rand([batch_size, 2],dtype=torch.float32, device = self.device)
 
@@ -333,9 +360,11 @@ class PINN_energy(Solver):
                 for _ in optimizer.param_groups:
                     _['lr'] = _['lr'] * gamma           
 
-    def train_adam(self):
+    def train_adam(self,boundary_name_list = ["left","bottom","right","top"]):
         batch_size_BC = self.config['training']["boundary_batch"]
-        X_boundaries = self.sample_all_boundary(batch_size_BC).to(self.device)
+        n_points_per_boundary = int(batch_size_BC/len(boundary_name_list))
+        # X_boundaries = self.sample_all_boundary(batch_size_BC).to(self.device)
+        X_boundaries = self.sample_boundaries(boundary_name_list,n_points_per_boundary).to(self.device)
         batch_size = self.config['training']["interior_batch"]
         X_I = torch.rand([batch_size, 2],dtype=torch.float32, device = self.device)
 
@@ -578,12 +607,15 @@ class Grid_MLP(Solver):
         self.X_field = self.generate_grid_points(501)
         self.u_real = self.get_real_solution(self.X_field)
 
-    def train_decoupled(self):
+    def train_decoupled(self,boundary_name_list = ["left","bottom","right","top"]):
         pretrain_batch_size = self.config['training']["boundary_batch"]
+        n_points_per_boundary = int(pretrain_batch_size/len(boundary_name_list))
         n_step_output_pretrain = self.config['pretrain']['n_step_output']
         n_step_decay_pretrain = self.config["pretrain"]['n_step_decay']
 
-        X_boundaries = self.sample_all_boundary(pretrain_batch_size).to(self.device)
+        # X_boundaries = self.sample_all_boundary(pretrain_batch_size).to(self.device)
+        X_boundaries = self.sample_boundaries(boundary_name_list,n_points_per_boundary).to(self.device)
+
         optimizer_pretrain = torch.optim.Adam([
             {'params':self.encoding.parameters()},
             {'params':self.mlp.parameters(),'weight_decay':1e-6},
@@ -616,16 +648,24 @@ class Grid_MLP(Solver):
                     _['lr'] = _['lr']/2
 
         # Get boundary values
+        grid_values = {}
         with torch.no_grad():
             for name, p in self.encoding.named_parameters():
-                if name == 'params_left':
-                    grid_left = p
-                elif name == 'params_bottom':
-                    grid_bottom = p
-                elif name == 'params_right':
-                    grid_right = p
-                elif name == 'params_top':
-                    grid_top = p
+                for fixed_bounary_name in boundary_name_list:
+                    if fixed_bounary_name in name:
+                        grid_values[fixed_bounary_name] = p
+                # if name == 'params_left':
+                #     # grid_left = p
+                #     grid_values["left"] = p
+                # elif name == 'params_bottom':
+                #     # grid_bottom = p
+                #     grid_values["bottom"] = p
+                # elif name == 'params_right':
+                #     # grid_right = p
+                #     grid_values["right"] = p
+                # elif name == 'params_top':
+                #     # grid_top = p
+                #     grid_values["top"] = p
 
         # New grids
         self.encoding = tcnn.Encoding1(2, self.config["encoding"],dtype=torch.float32)
@@ -633,21 +673,24 @@ class Grid_MLP(Solver):
         opti_group = []
         with torch.no_grad():
             for name, p in self.encoding.named_parameters():
-                if name == 'params_inner':
-                    p.requires_grad = True
+                for fixed_bounary_name in boundary_name_list:
+                    if fixed_bounary_name in name:
+                        p[:] = grid_values[fixed_bounary_name][:]
+                        p.requires_grad = False
+                if p.requires_grad:
                     opti_group.append({'params':p})
-                elif name == 'params_left':
-                    p[:] = grid_left[:]
-                    p.requires_grad = False
-                elif name == 'params_bottom':
-                    p[:] = grid_bottom[:]
-                    p.requires_grad = False
-                elif name == 'params_right':
-                    p[:] = grid_right[:]
-                    p.requires_grad = False 
-                elif name == 'params_top':
-                    p[:] = grid_top[:]
-                    p.requires_grad = False
+                # elif name == 'params_left':
+                #     p[:] = grid_left[:]
+                #     p.requires_grad = False
+                # elif name == 'params_bottom':
+                #     p[:] = grid_bottom[:]
+                #     p.requires_grad = False
+                # elif name == 'params_right':
+                #     p[:] = grid_right[:]
+                #     p.requires_grad = False 
+                # elif name == 'params_top':
+                #     p[:] = grid_top[:]
+                #     p.requires_grad = False
         for p in self.mlp.parameters():
             p.requires_grad = False
         self.mlp.eval()
@@ -697,10 +740,12 @@ class Grid_MLP(Solver):
                 for _ in optimizer.param_groups:
                     _['lr'] = _['lr'] * gamma
 
-    def train_one_step(self):
+    def train_one_step(self,boundary_name_list = ["left","bottom","right","top"]):
         # One step training (Train for BC and PDE together)
         batch_size_BC = self.config['training']["boundary_batch"]
-        X_boundaries = self.sample_all_boundary(batch_size_BC).to(self.device)
+        n_points_per_boundary = int(batch_size_BC/len(boundary_name_list))
+        # X_boundaries = self.sample_all_boundary(batch_size_BC).to(self.device)
+        X_boundaries = self.sample_boundaries(boundary_name_list,n_points_per_boundary).to(self.device)
         batch_size = self.config['training']["interior_batch"]
         n_steps = self.config['training']['n_steps']
         n_step_output = self.config['training']['n_step_output']

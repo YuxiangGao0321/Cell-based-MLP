@@ -128,6 +128,7 @@ class grad2(torch.nn.Module):
 
 
         res = {
+            'u':u,
             'du_dx':u_x,
             'du_dy':u_y,
             'd2u_dx2':u_xx,

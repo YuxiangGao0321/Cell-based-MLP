@@ -10,7 +10,8 @@ class Poisson_equation(torch.nn.Module):
         result = torch.exp(-x)*(x-2+y**3+6*y)
         return result
     def strong_form(self,X,grad_result):
-        du_dx,du_dy,d2u_dx2,d2u_dy2 = grad_result["du_dx"],grad_result["du_dy"],grad_result["d2u_dx2"],grad_result["d2u_dy2"]
+        # du_dx,du_dy,d2u_dx2,d2u_dy2 = grad_result["du_dx"],grad_result["du_dy"],grad_result["d2u_dx2"],grad_result["d2u_dy2"]
+        d2u_dx2,d2u_dy2 = grad_result["d2u_dx2"],grad_result["d2u_dy2"]
         result = d2u_dx2 + d2u_dy2 - self.f(X)
         return result
     def variational_energy(self,X,u,du_dx,du_dy):
@@ -79,4 +80,27 @@ class microscale_Poisson_PBC(torch.nn.Module):
     def real_solution(self,X):
         file_path = os.path.join(self.result_path,"u_eval.txt")
         result = torch.tensor(np.loadtxt(file_path))
+        return result
+
+class Phase_field_equation_1d(torch.nn.Module):
+    def __init__(self,l = 0.025):
+        super().__init__()
+        self.l = l
+        self.l_rcpl = 1/l
+    def f(self,X):
+        return 0
+    def strong_form(self,X,grad_result):
+        u = grad_result["u"]
+        d2u_dx2 = grad_result["d2u_dx2"]
+        d2u_dy2 = grad_result["d2u_dy2"]
+        result = u - self.l**2*(d2u_dx2 + d2u_dy2)
+        return result
+    def variational_energy(self,X,u,du_dx,du_dy):
+        result = 1/2*(u**2 + self.l**2*(du_dx**2 + du_dy**2))
+        return result
+    def BC_function(self,X):
+        result = torch.exp(-torch.abs(X[:,0])*self.l_rcpl)
+        return result
+    def real_solution(self,X):
+        result = torch.exp(-torch.abs(X[:,0])*self.l_rcpl)
         return result

@@ -59,7 +59,7 @@ def collocation_points_1D(n_points,v1,v2,device = 'cuda'):
 # Generate folder
 def my_mkdir(path):
     if not os.path.exists(path):
-        os.mkdir(path)
+        os.makedirs(path)
 
 # RMSE
 def my_rmse(X1,X2):

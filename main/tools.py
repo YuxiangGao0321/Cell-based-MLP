@@ -281,6 +281,8 @@ def get_loss_curve(task_name,dir_name,main_path,output_config = False):
     for result_file in os.listdir(result_path):
         if not result_file.endswith(".txt"):
             continue
+        elif "pred" in result_file or "real" in result_file:
+            continue
         loss_curve = np.loadtxt(os.path.join(result_path, result_file))
         time.append(loss_curve[:,0])
         error.append(loss_curve[:,-1])
@@ -359,3 +361,15 @@ def get_result_table(task_name,dict_path_list,main_path):
         result_dict[result_name]["error_max"] = np.max(error)
 
     return result_dict
+
+def get_lambda(json_path):
+    with open(json_path, "r") as config_file:
+        config = json.load(config_file)
+    return config["loss"]["lambda"]
+
+def save_field_result(field,file_name,folder_path = None,if_overwrite = False):
+    path = os.path.join(folder_path,"{}.txt".format(file_name))
+    if os.path.exists(path) and not if_overwrite:
+        print("The file already exists.")
+    else:
+        np.savetxt(path, np.array(field))

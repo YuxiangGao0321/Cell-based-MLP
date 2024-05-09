@@ -103,8 +103,7 @@ class Solver:
 
     def save_test_loss(self,file_name,folder_path = None):
         path = os.path.join(folder_path,"{}.txt".format(file_name))
-        np.savetxt(path, np.array(self.test_loss))        
-    
+        np.savetxt(path, np.array(self.test_loss))
 
     
 
@@ -612,9 +611,21 @@ class Grid_MLP(Solver):
         n_points_per_boundary = int(pretrain_batch_size/len(boundary_name_list))
         n_step_output_pretrain = self.config['pretrain']['n_step_output']
         n_step_decay_pretrain = self.config["pretrain"]['n_step_decay']
+        n_step_pretrain = self.config['pretrain']["n_steps"]+1
 
         # X_boundaries = self.sample_all_boundary(pretrain_batch_size).to(self.device)
         X_boundaries = self.sample_boundaries(boundary_name_list,n_points_per_boundary).to(self.device)
+        if_pretrain = False
+        try:
+            if_pretrain = self.config["pretrain"]["if_pretrain"]
+        except:
+            pass
+        if if_pretrain == "True":
+            print("Add interior points for pretrain")
+            X_I = torch.rand([pretrain_batch_size, 2],dtype=torch.float32, device = self.device)
+            X_boundaries = torch.cat((X_boundaries,X_I), dim = 0)
+            n_step_pretrain = (n_step_pretrain-1)*2 + 1
+            n_step_decay_pretrain = (n_step_decay_pretrain)*2
 
         optimizer_pretrain = torch.optim.Adam([
             {'params':self.encoding.parameters()},
@@ -628,7 +639,7 @@ class Grid_MLP(Solver):
         total_time = 0
         start = time.time()
         # Train for BC
-        for i in range(1, self.config['pretrain']["n_steps"]+1):
+        for i in range(1, n_step_pretrain):
             
             optimizer_pretrain.zero_grad()
 

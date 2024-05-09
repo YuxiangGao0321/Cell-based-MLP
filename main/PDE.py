@@ -104,3 +104,25 @@ class Phase_field_equation_1d(torch.nn.Module):
     def real_solution(self,X):
         result = torch.exp(-torch.abs(X[:,0])*self.l_rcpl)
         return result
+    
+class High_frequency_Poisson_equation(torch.nn.Module):
+    def __init__(self,frequency = 3):
+        super().__init__()
+        self.omeaga = 2*frequency*torch.pi
+        self.a = 1/(2*self.omeaga**2)
+    def f(self,X):
+        x,y = X[:,0],X[:,1]
+        return -torch.sin(self.omeaga*x)*torch.sin(self.omeaga*y)
+    def strong_form(self,X,grad_result):
+        # du_dx,du_dy,d2u_dx2,d2u_dy2 = grad_result["du_dx"],grad_result["du_dy"],grad_result["d2u_dx2"],grad_result["d2u_dy2"]
+        d2u_dx2,d2u_dy2 = grad_result["d2u_dx2"],grad_result["d2u_dy2"]
+        result = d2u_dx2 + d2u_dy2 - self.f(X)
+        return result
+    def variational_energy(self,X,u,du_dx,du_dy):
+        result = 1/2*(du_dx**2 + du_dy**2) + self.f(X)*u
+        return result
+    def BC_function(self,X):
+        return torch.sin(X[:,0]*torch.pi)*torch.sin(X[:,1]*torch.pi)
+        # return self.real_solution(X)
+    def real_solution(self,X):
+        return -self.a*self.f(X)

@@ -172,7 +172,7 @@ cython_debug/
 #.idea/
 >>>>>>> Cell-based-MLP/main
 
-benchmarks/
+/benchmarks/
 data/
 dependencies/
 include/

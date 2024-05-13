@@ -6,6 +6,16 @@ build*
 dist
 /.vscode
 # MY
+benchmarks/
+data/
+dependencies/
+include/
+samples/
+scripts/
+src/
+CMakeLists.txt
+DOCUMENTATION.md
+README_0.md
 **/figs/
 **/Tasks/
 my_job/
@@ -172,13 +182,3 @@ cython_debug/
 #.idea/
 >>>>>>> Cell-based-MLP/main
 
-/benchmarks/
-data/
-dependencies/
-include/
-samples/
-scripts/
-src/
-CMakeLists.txt
-DOCUMENTATION.md
-README_0.md

@@ -6,7 +6,7 @@ from Solvers import Grid_MLP_pbc,PINN_energy_pbc,Grid_MLP
 from tools import plot_diff,save_field_result
 
 equation_name = "microscale_pbc"
-task_name = "GridMLP_share"#'GridMLP_share_resolution_levels_sin_network_3e4' #"PINN_energy_lambda_ADAM_sin" #
+task_name = "GridMLP_share_single_level"#'GridMLP_share_resolution_levels_sin_network_3e4' #"PINN_energy_lambda_ADAM_sin" #
 #'GridMLP_standard' #"PINN_energy_lambda_ADAM_eps=1" # "GridMLP_decoupled" # "PINN_energy_lambda_ADAM_eps=1" #"PINN_lambda_ADAM_eps=1"
 task_path = "D:/Research_CAE/MyTinyCUDANN/tiny-cuda-nn/main/{}/Tasks/{}".format(equation_name,task_name)
 
@@ -43,7 +43,10 @@ for config_file_name in os.listdir(task_path):
             
             if "share" in task_name:
                 solver = Grid_MLP_pbc(config,equation())
-                solver.train_share_parameters()
+                if "single_level" in task_name:
+                    solver.train_share_parameters_single_level()
+                else:
+                    solver.train_share_parameters()
             elif "standard" in task_name:
                 solver = Grid_MLP(config,equation())
                 solver.train_pbc()

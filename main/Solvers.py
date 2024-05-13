@@ -4,6 +4,7 @@ sys.path.append(sys_path)
 from my_tiny_cuda import my_MLP,my_sin,weights_init_uniform
 from my_tiny_cuda import plot_diff,my_relativeL2
 
+from network import Squeeze
 from gradient import grad1, grad2
 from tools import random_points_1D,collocation_points_1D
 import torch
@@ -866,6 +867,148 @@ class Grid_MLP(Solver):
         loss = self.MSE(self.model(self.pbc_collocation["left"]),self.model(self.pbc_collocation["right"])) + \
             self.MSE(self.model(self.pbc_collocation["bottom"]),self.model(self.pbc_collocation["top"]))
         return loss
+    
+    def train_decoupled_single_level(self,boundary_name_list = ["left","bottom","right","top"]):
+        self.model = torch.nn.Sequential(self.encoding,Squeeze())
+        pretrain_batch_size = self.config['training']["boundary_batch"]
+        n_points_per_boundary = int(pretrain_batch_size/len(boundary_name_list))
+        n_step_output_pretrain = self.config['pretrain']['n_step_output']
+        n_step_decay_pretrain = self.config["pretrain"]['n_step_decay']
+        n_step_pretrain = self.config['pretrain']["n_steps"]+1
+
+        # X_boundaries = self.sample_all_boundary(pretrain_batch_size).to(self.device)
+        X_boundaries = self.sample_boundaries(boundary_name_list,n_points_per_boundary).to(self.device)
+        if_pretrain = False
+        try:
+            if_pretrain = self.config["pretrain"]["if_pretrain"]
+        except:
+            pass
+        if if_pretrain == "True":
+            print("Add interior points for pretrain")
+            X_I = torch.rand([pretrain_batch_size, 2],dtype=torch.float32, device = self.device)
+            X_boundaries = torch.cat((X_boundaries,X_I), dim = 0)
+            n_step_pretrain = (n_step_pretrain-1)*2 + 1
+            n_step_decay_pretrain = (n_step_decay_pretrain)*2
+
+        optimizer_pretrain = torch.optim.Adam([
+            {'params':self.encoding.parameters()},
+        ], lr=self.config["optimizer"]['learning_rate'], eps=1e-15)
+
+        f_boundaries = self.PDE.BC_function(X_boundaries).to(self.device)
+
+
+        self.model.train()
+        total_time = 0
+        start = time.time()
+        # Train for BC
+        for i in range(1, n_step_pretrain):
+            
+            optimizer_pretrain.zero_grad()
+
+            loss = self.MSE(self.model(X_boundaries),f_boundaries)
+            
+            loss.backward()
+            optimizer_pretrain.step()
+            
+            if i%n_step_output_pretrain == 0:
+                end = time.time()
+                total_time += end - start
+                print('Iter:',i,'loss_pretrain:',loss.item())
+                start = time.time()
+            
+            if i%n_step_decay_pretrain == 0:
+                for _ in optimizer_pretrain.param_groups:
+                    _['lr'] = _['lr']/2
+
+        # Get boundary values
+        grid_values = {}
+        with torch.no_grad():
+            for name, p in self.encoding.named_parameters():
+                for fixed_bounary_name in boundary_name_list:
+                    if fixed_bounary_name in name:
+                        grid_values[fixed_bounary_name] = p
+                # if name == 'params_left':
+                #     # grid_left = p
+                #     grid_values["left"] = p
+                # elif name == 'params_bottom':
+                #     # grid_bottom = p
+                #     grid_values["bottom"] = p
+                # elif name == 'params_right':
+                #     # grid_right = p
+                #     grid_values["right"] = p
+                # elif name == 'params_top':
+                #     # grid_top = p
+                #     grid_values["top"] = p
+
+        # New grids
+        self.encoding = tcnn.Encoding1(2, self.config["encoding"],dtype=torch.float32)
+        self.model = self.model = torch.nn.Sequential(self.encoding,Squeeze())
+        opti_group = []
+        with torch.no_grad():
+            for name, p in self.encoding.named_parameters():
+                for fixed_bounary_name in boundary_name_list:
+                    if fixed_bounary_name in name:
+                        p[:] = grid_values[fixed_bounary_name][:]
+                        p.requires_grad = False
+                if p.requires_grad:
+                    opti_group.append({'params':p})
+                # elif name == 'params_left':
+                #     p[:] = grid_left[:]
+                #     p.requires_grad = False
+                # elif name == 'params_bottom':
+                #     p[:] = grid_bottom[:]
+                #     p.requires_grad = False
+                # elif name == 'params_right':
+                #     p[:] = grid_right[:]
+                #     p.requires_grad = False 
+                # elif name == 'params_top':
+                #     p[:] = grid_top[:]
+                #     p.requires_grad = False
+
+        # Train for PDE
+        n_steps = self.config['training']['n_steps']
+        n_step_output = self.config['training']['n_step_output']
+        n_step_decay = self.config["optimizer"]['n_step_decay']
+        gamma=self.config["optimizer"]['gamma']
+
+        batch_size = self.config['training']["interior_batch"]
+
+        optimizer = torch.optim.Adam(opti_group, lr=self.config["optimizer"]['learning_rate'], eps=1e-15)
+
+
+        diff_info = grad1(self.model, batch_size)
+        diff_info.to_device(self.device)
+
+        self.encoding.train()
+        start = time.time()
+        self.test_loss = []
+        for i in range(1, n_steps+1):
+
+            X_I = torch.rand([batch_size, 2],dtype=torch.float32, device = self.device)
+
+            du_dx,du_dy,u = diff_info.forward_2d(X_I)
+
+
+            inner_loss = self.PDE.variational_energy(X_I,u,du_dx,du_dy).mean()
+            loss = inner_loss
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+                
+
+            if i % n_step_output == 0:
+                end = time.time()
+                total_time += end - start
+                u_error = self.eval_model(self.X_field)
+                self.test_loss.append([total_time, i, u_error])
+                print('Iter:',i,'inner_loss:',loss.item(),"\n",'u_L2:',u_error,)
+                self.encoding.train()
+                start = time.time()
+
+            if i%n_step_decay == 0:
+                for _ in optimizer.param_groups:
+                    _['lr'] = _['lr'] * gamma
 
 
 
@@ -958,6 +1101,55 @@ class Grid_MLP_pbc(Solver):
                 for _ in optimizer.param_groups:
                     _['lr'] = _['lr'] * gamma
 
+    def train_share_parameters_single_level(self):
+        self.model = torch.nn.Sequential(self.encoding,Squeeze())
+        optimizer = torch.optim.Adam([
+            {'params':self.encoding.parameters()},
+        ], lr=self.config["optimizer"]['learning_rate'], eps=1e-15)
+
+        # Train for PDE
+        n_steps = self.config['training']['n_steps']
+        n_step_output = self.config['training']['n_step_output']
+        n_step_decay = self.config["optimizer"]['n_step_decay']
+        gamma=self.config["optimizer"]['gamma']
+
+        batch_size = self.config['training']["interior_batch"]
+
+
+        diff_info = grad1(self.model, batch_size)
+        diff_info.to_device(self.device)
+
+        self.model.train()
+        total_time = 0
+        start = time.time()
+        self.test_loss = []
+        for i in range(1, n_steps+1):
+
+            X_I = torch.rand([batch_size, 2],dtype=torch.float32, device = self.device)
+
+            du_dx,du_dy,u = diff_info.forward_2d(X_I)
+
+
+            inner_loss = self.PDE.variational_energy(X_I,u,du_dx,du_dy).mean()
+            loss = inner_loss
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+                
+
+            if i % n_step_output == 0:
+                end = time.time()
+                total_time += end - start
+                u_error = self.eval_model(self.X_field, fixed_point=self.x00)
+                self.test_loss.append([total_time, i, u_error])
+                print('Iter:',i,'inner_loss:',loss.item(),"\n",'u_L2:',u_error,)
+                self.encoding.train()
+                start = time.time()
+
+            if i%n_step_decay == 0:
+                for _ in optimizer.param_groups:
+                    _['lr'] = _['lr'] * gamma
 
 
 if __name__ == '__main__':

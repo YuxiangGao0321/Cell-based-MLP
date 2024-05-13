@@ -171,3 +171,14 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 >>>>>>> Cell-based-MLP/main
+
+benchmarks/
+data/
+dependencies/
+include/
+samples/
+scripts/
+src/
+CMakeLists.txt
+DOCUMENTATION.md
+README_0.md

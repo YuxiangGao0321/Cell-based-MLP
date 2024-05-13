@@ -350,8 +350,9 @@ def get_result_table(task_name,dict_path_list,main_path):
         time = []
         error = []
         for result_file in os.listdir(result_path):
-            if not result_file.endswith(".txt"):
+            if not result_file.endswith(".txt") or "pred" in result_file or "real" in result_file:
                 continue
+            # print(result_file)
             loss_curve = np.loadtxt(os.path.join(result_path, result_file))
             error.append(loss_curve[-1,-1])
             time.append(loss_curve[-1,0])

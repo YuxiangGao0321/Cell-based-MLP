@@ -6,7 +6,7 @@ from Solvers import Grid_MLP, PINN, PINN_energy
 from tools import plot_diff,save_field_result
 
 equation_name = "Poisson_DirichletBC" #"Multiscale" #"High_frequency_Poisson"#"Phase_field_1d" # 
-task_name = "GridMLP_decoupled"#"GridMLP_decoupled" # 'GridMLP_decoupled_resolution_levels_network_sin' #"PINN_energy_lambda_ADAM" #'GridMLP_standard' # "PINN_lambda_ADAM" #"GridMLP_decoupled" #"PINN_lambda_ADAM_sin"
+task_name = "GridMLP_decoupled_level_network"#"GridMLP_decoupled" # 'GridMLP_decoupled_resolution_levels_network_sin' #"PINN_energy_lambda_ADAM" #'GridMLP_standard' # "PINN_lambda_ADAM" #"GridMLP_decoupled" #"PINN_lambda_ADAM_sin"
 #'GridMLP_standard' #"PINN_energy_lambda_ADAM_eps=1" # "GridMLP_decoupled" # "PINN_energy_lambda_ADAM_eps=1" #"PINN_lambda_ADAM_eps=1"
 task_path = "D:/Research_CAE/MyTinyCUDANN/tiny-cuda-nn/main/{}/Tasks/{}".format(equation_name,task_name)
 
@@ -53,7 +53,10 @@ for config_file_name in os.listdir(task_path):
             model_name = "GridMLP"
             solver = Grid_MLP(config,equation())
             if "decoupled" in task_name:
-                solver.train_decoupled(boundary_name_list = boundary_name_list)
+                if "single_level" in task_name:
+                    solver.train_decoupled_single_level(boundary_name_list = boundary_name_list)
+                else:
+                    solver.train_decoupled(boundary_name_list = boundary_name_list)
             elif "standard" in task_name:
                 solver.train_one_step(boundary_name_list = boundary_name_list)
             else:
@@ -63,8 +66,8 @@ for config_file_name in os.listdir(task_path):
         
         pred,u_real_plot = solver.eval_model_for_plot(501)
 
-        plot_diff(pred,u_real_plot,field_name=model_name,f_name=i_test,f_path=result_path,
-                  ifsave=True,ifplot=False)
+        # plot_diff(pred,u_real_plot,field_name=model_name,f_name=i_test,f_path=result_path,
+        #           ifsave=True,ifplot=False)
         save_field_result(pred,file_name = "pred_{}".format(i_test),folder_path = result_path,if_overwrite = False)
         save_field_result(u_real_plot,file_name = "real_solution_plot".format(i_test),folder_path = result_path,if_overwrite = False)
         solver.save_test_loss(file_name=i_test,folder_path=result_path)

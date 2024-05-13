@@ -228,9 +228,9 @@ class Module1(torch.nn.Module):
 		my_params = self.params.clone()
 		my_params[self.inner_idx] = self.params_inner
 		my_params[self.boundary_idx_top] = self.params_top
+		my_params[self.boundary_idx_bottom] = self.params_bottom
 		my_params[self.boundary_idx_right] = self.params_right
 		# if self.bc_side == 'left':
-		my_params[self.boundary_idx_bottom] = self.params_bottom
 		my_params[self.boundary_idx_left] = self.params_left
 		# else:
 		# 	my_params[self.boundary_idx_left] = self.params_left

@@ -59,7 +59,7 @@ def collocation_points_1D(n_points,v1,v2,device = 'cuda'):
 # Generate folder
 def my_mkdir(path):
     if not os.path.exists(path):
-        os.mkdir(path)
+        os.makedirs(path)
 
 # RMSE
 def my_rmse(X1,X2):
@@ -75,11 +75,12 @@ def plot_diff(x,ground_truth,field_name,f_name,f_path = "figs",eps = 1e-4,ifsave
     from matplotlib import cm
     from matplotlib import pyplot as plt
     from matplotlib import colors
-    plt.rcParams.update({'font.size': 15})
+    from matplotlib.ticker import ScalarFormatter
+    plt.rcParams.update({'font.size': 17})
     resolution = x.shape[0]
     xmin,ymin = 0,0
     xmax,ymax = L,L
-    fig = plt.figure(figsize=(15,4))
+    fig = plt.figure(figsize=(14,4))
 
     plt.subplot(131)
     # fmax = float(np.format_float_positional(x.max(),precision = 3,unique=False, fractional=False, trim='k'))
@@ -107,7 +108,7 @@ def plot_diff(x,ground_truth,field_name,f_name,f_path = "figs",eps = 1e-4,ifsave
     vmin=fmin,vmax=fmax)#,cmap = cm.binary)
     plt.xticks([0,resolution],[xmin,xmax])
     plt.yticks([0,resolution],[ymin,ymax])
-    plt.title("ground_truth")
+    plt.title("Real solution")
     plt.colorbar(ticks=ct)
     # plt.axis('off')
 
@@ -115,8 +116,9 @@ def plot_diff(x,ground_truth,field_name,f_name,f_path = "figs",eps = 1e-4,ifsave
     plt.subplot(133)
     diff = x - ground_truth
     # rmse = float(np.format_float_positional(my_rmse(x, ground_truth),precision = 4,unique=False, fractional=False, trim='k'))
-    nrmse = float(np.format_float_positional(my_relativeL2(x, ground_truth),precision = 4,
-        unique=False, fractional=False, trim='k'))
+    # nrmse = float(np.format_float_positional(my_relativeL2(x, ground_truth),precision = 4,
+    #     unique=False, fractional=False, trim='k'))
+    nrmse = my_relativeL2(x, ground_truth)
     fmax = float(np.format_float_positional(diff.max(),precision = 3,unique=False, fractional=False, trim='k'))
     fmin = float(np.format_float_positional(diff.min(),precision = 3,unique=False, fractional=False, trim='k'))
     if fmin<-eps and fmax>eps:
@@ -129,8 +131,13 @@ def plot_diff(x,ground_truth,field_name,f_name,f_path = "figs",eps = 1e-4,ifsave
     # plt.imshow(f_plot,origin = 'lower',interpolation = None)
     plt.xticks([0,resolution],[xmin,xmax])
     plt.yticks([0,resolution],[ymin,ymax])
-    plt.title("{} - real\n(NRMSE: {})".format(field_name,nrmse))
-    plt.colorbar(ticks=ct)
+
+    # plt.title("{} - Real\n(NRMSE: {:.2e})".format(field_name,nrmse))
+    plt.title("NRMSE: {:.2e}\n{} - Real".format(nrmse,field_name))
+    color_bar = plt.colorbar(ticks=ct)
+    formatter = ScalarFormatter(useMathText=True)
+    formatter.set_powerlimits((0, 0))
+    color_bar.ax.yaxis.set_major_formatter(formatter)
     plt.axis('off')
     fig.tight_layout()
     if ifsave:
@@ -274,6 +281,8 @@ def get_loss_curve(task_name,dir_name,main_path,output_config = False):
     for result_file in os.listdir(result_path):
         if not result_file.endswith(".txt"):
             continue
+        elif "pred" in result_file or "real" in result_file:
+            continue
         loss_curve = np.loadtxt(os.path.join(result_path, result_file))
         time.append(loss_curve[:,0])
         error.append(loss_curve[:,-1])
@@ -341,8 +350,9 @@ def get_result_table(task_name,dict_path_list,main_path):
         time = []
         error = []
         for result_file in os.listdir(result_path):
-            if not result_file.endswith(".txt"):
+            if not result_file.endswith(".txt") or "pred" in result_file or "real" in result_file:
                 continue
+            # print(result_file)
             loss_curve = np.loadtxt(os.path.join(result_path, result_file))
             error.append(loss_curve[-1,-1])
             time.append(loss_curve[-1,0])
@@ -352,3 +362,15 @@ def get_result_table(task_name,dict_path_list,main_path):
         result_dict[result_name]["error_max"] = np.max(error)
 
     return result_dict
+
+def get_lambda(json_path):
+    with open(json_path, "r") as config_file:
+        config = json.load(config_file)
+    return config["loss"]["lambda"]
+
+def save_field_result(field,file_name,folder_path = None,if_overwrite = False):
+    path = os.path.join(folder_path,"{}.txt".format(file_name))
+    if os.path.exists(path) and not if_overwrite:
+        print("The file already exists.")
+    else:
+        np.savetxt(path, np.array(field))

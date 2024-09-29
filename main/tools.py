@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import os
 import json
-
+import re
 # Calculate vectors
 def dv_calculation(v1,v2):
     d1 = len(v1)
@@ -270,6 +270,7 @@ def plot_result_node(f,f0,x,mesh,name,f_name = None,mydpi = 500, L = 1,ifsave = 
 
 
 def get_loss_curve(task_name,dir_name,main_path,output_config = False):
+    pattern = r'^(100|[1-9]?[0-9])\.txt$'
     task_path = os.path.join(main_path, "Tasks",task_name)
 
     result_path = os.path.join(task_path, dir_name)
@@ -279,9 +280,11 @@ def get_loss_curve(task_name,dir_name,main_path,output_config = False):
     time = []
     error = []
     for result_file in os.listdir(result_path):
-        if not result_file.endswith(".txt"):
-            continue
-        elif "pred" in result_file or "real" in result_file:
+        # if not result_file.endswith(".txt"):
+        #     continue
+        # elif "pred" in result_file or "real" in result_file:
+        #     continue
+        if not re.match(pattern, result_file):
             continue
         loss_curve = np.loadtxt(os.path.join(result_path, result_file))
         time.append(loss_curve[:,0])
@@ -300,6 +303,7 @@ def get_loss_curve(task_name,dir_name,main_path,output_config = False):
         return res_dict
 
 def get_lambda_curve(task_name,main_path):
+    pattern = r'^(100|[1-9]?[0-9])\.txt$'
     task_path = os.path.join(main_path, "Tasks",task_name)
     lambda_list = []
     error_list = []
@@ -313,7 +317,7 @@ def get_lambda_curve(task_name,main_path):
         # time = []
         error = []
         for result_file in os.listdir(result_path):
-            if not result_file.endswith(".txt"):
+            if not re.match(pattern, result_file):
                 continue
             loss_curve = np.loadtxt(os.path.join(result_path, result_file))
             error.append(loss_curve[-1,-1])

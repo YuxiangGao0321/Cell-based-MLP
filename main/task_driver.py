@@ -1,12 +1,12 @@
 import os
 import json
 from tools import my_mkdir
-from PDE import Poisson_equation,multiscale_equation, Phase_field_equation_1d, High_frequency_Poisson_equation
+from PDE import Poisson_equation,multiscale_equation, Phase_field_equation_1d, High_frequency_Poisson_equation,Helmholtz_equation,Wave_equation
 from Solvers import Grid_MLP, PINN, PINN_energy
 from tools import plot_diff,save_field_result
 
-equation_name = "Poisson_DirichletBC" #"Multiscale" #"High_frequency_Poisson"#"Phase_field_1d" # 
-task_name = "GridMLP_decoupled_level_network"#"GridMLP_decoupled" # 'GridMLP_decoupled_resolution_levels_network_sin' #"PINN_energy_lambda_ADAM" #'GridMLP_standard' # "PINN_lambda_ADAM" #"GridMLP_decoupled" #"PINN_lambda_ADAM_sin"
+equation_name = "Wave_equation"# "Helmholtz_equation"##"Poisson_DirichletBC" #"Multiscale" #"High_frequency_Poisson"#"Phase_field_1d" # 
+task_name = "GridMLP_decoupled"#"GridMLP_decoupled" # 'GridMLP_decoupled_resolution_levels_network_sin' #"PINN_energy_lambda_ADAM" #'GridMLP_standard' # "PINN_lambda_ADAM" #"GridMLP_decoupled" #"PINN_lambda_ADAM_sin"
 #'GridMLP_standard' #"PINN_energy_lambda_ADAM_eps=1" # "GridMLP_decoupled" # "PINN_energy_lambda_ADAM_eps=1" #"PINN_lambda_ADAM_eps=1"
 task_path = "D:/Research_CAE/MyTinyCUDANN/tiny-cuda-nn/main/{}/Tasks/{}".format(equation_name,task_name)
 
@@ -22,7 +22,15 @@ elif equation_name == "High_frequency_Poisson":
 elif equation_name == "Phase_field_1d":
     equation = Phase_field_equation_1d
     boundary_name_list = ["left","right"]
-
+elif equation_name == "Helmholtz_equation":
+    equation = Helmholtz_equation
+    boundary_name_list = ["left","bottom","right","top"]
+elif equation_name == "Wave_equation":
+    equation = Wave_equation
+    boundary_name_list = ["left","top","bottom","right"]
+# elif equation_name == "Heat_equation":
+#     equation = Heat_equation
+#     boundary_name_list = ["left","top","bottom"]
 
 task_length = len(os.listdir(task_path))
 task_num = 0

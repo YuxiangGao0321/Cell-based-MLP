@@ -126,3 +126,72 @@ class High_frequency_Poisson_equation(torch.nn.Module):
         # return self.real_solution(X)
     def real_solution(self,X):
         return -self.a*self.f(X)
+
+class Helmholtz_equation(torch.nn.Module):
+    def __init__(self,lam = 1, a1 = 4, a2 = 16):
+        super().__init__()
+        self.lam = lam
+        self.a1 = a1
+        self.a2 = a2
+    def f(self,X):
+        x,y = X[:,0],X[:,1]
+        return -((self.a1*torch.pi)**2 + (self.a2*torch.pi)**2 - self.lam) \
+                *torch.sin(self.a1*torch.pi*x)*torch.sin(self.a2*torch.pi*y)
+        
+    def strong_form(self,X,grad_result):
+        u = grad_result["u"]
+        d2u_dx2,d2u_dy2 = grad_result["d2u_dx2"],grad_result["d2u_dy2"]
+        result = d2u_dx2 + d2u_dy2 + self.lam*u - self.f(X)
+        return result
+    def variational_energy(self,X,u,du_dx,du_dy):
+        result = 0.5*(du_dx**2 + du_dy**2) - 0.5*self.lam*u**2 + self.f(X)*u
+        return result
+    def BC_function(self,X):
+        # return torch.sin(torch.pi*X[:,0])*torch.sin(torch.pi*X[:,1])
+        return X[:,0]*(1-X[:,0])*X[:,1]*(1-X[:,1])
+        # return self.real_solution(X)
+    def real_solution(self,X):
+        return torch.sin(self.a1*torch.pi*X[:,0])*torch.sin(self.a2*torch.pi*X[:,1])
+
+
+'''
+class Heat_equation(torch.nn.Module):
+    def __init__(self,k = 1, L = 1):
+        super().__init__()
+        self.k = k
+        self.L = L
+        self.tau = 1e-4
+    def strong_form(self,grad_result):
+        du_dt,d2u_dx2 = grad_result["du_dx"],grad_result["d2u_dy2"]
+        result = du_dt - self.k*d2u_dx2
+        return result
+    def variational_energy(self,X,u,du_dt,du_dx):
+        # result = 1/2*(du_dt**2 +self.k* du_dx**2)
+        result = 0.5*(self.tau*du_dt**2 + self.k* du_dx**2)*torch.exp(-X[:,0]/self.tau)
+        return result
+    def BC_function(self,X):
+        # return torch.sin(X[:,0]*torch.pi)*torch.sin(X[:,1]*torch.pi)
+        return self.real_solution(X)
+    def real_solution(self,X):
+        return torch.exp(-self.k*(torch.pi/self.L)**2*X[:,0])*torch.sin(X[:,1]*torch.pi/self.L)
+
+'''
+class Wave_equation(torch.nn.Module):
+    def __init__(self,c = 2, L = 1):
+        super().__init__()
+        self.c = c
+        self.c2 = c**2
+        self.L = L
+    def strong_form(self,grad_result):
+        d2u_dt2,d2u_dx2 = grad_result["d2u_dx2"],grad_result["d2u_dy2"]
+        result = d2u_dt2 - self.c2*d2u_dx2
+        return result
+    def variational_energy(self,X,u,du_dt,du_dx):
+        # result = 1/2*(du_dt**2 +self.k* du_dx**2)
+        result = -0.5*(du_dt**2 - self.c2* du_dx**2)
+        return result
+    def BC_function(self,X):
+        # return torch.sin(X[:,0]*torch.pi)*torch.sin(X[:,1]*torch.pi)
+        return self.real_solution(X)
+    def real_solution(self,X):
+        return torch.sin(X[:,1]*torch.pi/self.L)*torch.cos(self.c*X[:,0]*torch.pi/self.L)

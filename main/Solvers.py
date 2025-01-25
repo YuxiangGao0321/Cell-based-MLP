@@ -724,11 +724,9 @@ class Grid_MLP(Solver):
         self.encoding.train()
         start = time.time()
         self.test_loss = []
-        X_I_base = self.generate_grid_points(int(np.sqrt(batch_size)), field_min = 0, field_max = 0.95)
-        X_I = X_I_base + torch.rand([batch_size, 2],dtype=torch.float32, device = self.device)*0.05
         for i in range(0, n_steps+1): #for i in range(1, n_steps+1):
 
-            # X_I = torch.rand([batch_size, 2],dtype=torch.float32, device = self.device)
+            X_I = torch.rand([batch_size, 2],dtype=torch.float32, device = self.device)
             
 
             du_dx,du_dy,u = diff_info.forward_2d(X_I)
@@ -743,7 +741,6 @@ class Grid_MLP(Solver):
                 
 
             if i % n_step_output == 0:
-                X_I = X_I_base + torch.rand([batch_size, 2],dtype=torch.float32, device = self.device)*0.05
                 end = time.time()
                 total_time += end - start
                 u_error = self.eval_model(self.X_field)

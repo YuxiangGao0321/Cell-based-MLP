@@ -174,7 +174,7 @@ class PINN(Solver):
         total_time = 0
         start = time.time()
         self.test_loss = []
-        for i in range(1, n_steps+1):
+        for i in range(0, n_steps+1): #for i in range(1, n_steps+1):
             X_I = torch.rand([batch_size, 2],dtype=torch.float32, device = self.device)
             def closure():
                 global bc_loss, inner_loss
@@ -234,7 +234,7 @@ class PINN(Solver):
         total_time = 0
         self.test_loss = []
         start = time.time()
-        for i in range(1, n_steps+1):
+        for i in range(0, n_steps+1): #for i in range(1, n_steps+1):
             
             optimizer.zero_grad()
             # Boundary
@@ -328,7 +328,7 @@ class PINN_energy(Solver):
         total_time = 0
         start = time.time()
         self.test_loss = []
-        for i in range(1, n_steps+1):
+        for i in range(0, n_steps+1): #for i in range(1, n_steps+1):
             X_I = torch.rand([batch_size, 2],dtype=torch.float32, device = self.device)
             def closure():
                 global bc_loss, inner_loss
@@ -387,7 +387,7 @@ class PINN_energy(Solver):
         total_time = 0
         self.test_loss = []
         start = time.time()
-        for i in range(1, n_steps+1):
+        for i in range(0, n_steps+1): #for i in range(1, n_steps+1):
             
             optimizer.zero_grad()
             # Boundary
@@ -480,7 +480,7 @@ class PINN_energy_pbc(Solver):
         total_time = 0
         start = time.time()
         self.test_loss = []
-        for i in range(1, n_steps+1):
+        for i in range(0, n_steps+1): #for i in range(1, n_steps+1):
             X_I = torch.rand([batch_size, 2],dtype=torch.float32, device = self.device)
             def closure():
                 global bc_loss, inner_loss
@@ -536,7 +536,7 @@ class PINN_energy_pbc(Solver):
         total_time = 0
         self.test_loss = []
         start = time.time()
-        for i in range(1, n_steps+1):
+        for i in range(0, n_steps+1): #for i in range(1, n_steps+1):
             
             optimizer.zero_grad()
             # Boundary
@@ -618,7 +618,7 @@ class Grid_MLP(Solver):
         X_boundaries = self.sample_boundaries(boundary_name_list,n_points_per_boundary).to(self.device)
         if_pretrain = False
         try:
-            if_pretrain = self.config["pretrain"]["if_pretrain"]
+            if_pretrain = self.config["pretrain"]["if_interior"]
         except:
             pass
         if if_pretrain == "True":
@@ -717,16 +717,17 @@ class Grid_MLP(Solver):
 
         optimizer = torch.optim.Adam(opti_group, lr=self.config["optimizer"]['learning_rate'], eps=1e-15)
 
-
+        batch_size = int(np.sqrt(batch_size))**2
         diff_info = grad1(self.model, batch_size)
         diff_info.to_device(self.device)
 
         self.encoding.train()
         start = time.time()
         self.test_loss = []
-        for i in range(1, n_steps+1):
+        for i in range(0, n_steps+1): #for i in range(1, n_steps+1):
 
             X_I = torch.rand([batch_size, 2],dtype=torch.float32, device = self.device)
+            
 
             du_dx,du_dy,u = diff_info.forward_2d(X_I)
 
@@ -778,7 +779,7 @@ class Grid_MLP(Solver):
         total_time = 0
         start = time.time()
         self.test_loss = []
-        for i in range(1, n_steps+1):
+        for i in range(0, n_steps+1): #for i in range(1, n_steps+1):
             optimizer.zero_grad()
             X_I = torch.rand([batch_size, 2],dtype=torch.float32, device = self.device)
 
@@ -833,7 +834,7 @@ class Grid_MLP(Solver):
         total_time = 0
         start = time.time()
         self.test_loss = []
-        for i in range(1, n_steps+1):
+        for i in range(0, n_steps+1): #for i in range(1, n_steps+1):
             optimizer.zero_grad()
             X_I = torch.rand([batch_size, 2],dtype=torch.float32, device = self.device)
 
@@ -982,7 +983,7 @@ class Grid_MLP(Solver):
         self.encoding.train()
         start = time.time()
         self.test_loss = []
-        for i in range(1, n_steps+1):
+        for i in range(0, n_steps+1): #for i in range(1, n_steps+1):
 
             X_I = torch.rand([batch_size, 2],dtype=torch.float32, device = self.device)
 
@@ -1073,7 +1074,7 @@ class Grid_MLP_pbc(Solver):
         total_time = 0
         start = time.time()
         self.test_loss = []
-        for i in range(1, n_steps+1):
+        for i in range(0, n_steps+1): #for i in range(1, n_steps+1):
 
             X_I = torch.rand([batch_size, 2],dtype=torch.float32, device = self.device)
 
@@ -1123,7 +1124,7 @@ class Grid_MLP_pbc(Solver):
         total_time = 0
         start = time.time()
         self.test_loss = []
-        for i in range(1, n_steps+1):
+        for i in range(0, n_steps+1): #for i in range(1, n_steps+1):
 
             X_I = torch.rand([batch_size, 2],dtype=torch.float32, device = self.device)
 

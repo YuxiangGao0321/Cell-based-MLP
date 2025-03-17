@@ -1,0 +1,45 @@
+{
+    "encoding": {
+        "otype": "Grid",
+        "type": "Dense",
+        "n_levels": 16,
+        "n_features_per_level": 2,
+        "log2_hashmap_size": 30,
+        "base_resolution": 16,
+        "per_level_scale": 1.12,
+        "interpolation": "Linear"
+    },
+    "network": {
+        "type": "MLP",
+        "activation": "Sin",
+        "n_neurons": 32,
+        "n_hidden_layers": 1,
+        "spectral_norm": 1
+    },
+    "loss": {
+        "type": "energy",
+        "lambda": 1.0
+    },
+    "optimizer": {
+        "type": "ADAM",
+        "learning_rate": 0.002,
+        "max_iter": 0,
+        "n_step_decay": 2000,
+        "gamma": 0.4
+    },
+    "training": {
+        "n_steps": 8000,
+        "interior_batch": 30000,
+        "boundary_batch": 20000,
+        "n_step_output": 600
+    },
+    "pretrain": {
+        "if_interior": "True",
+        "n_steps": 1000,
+        "n_step_output": 200,
+        "n_step_decay": 200
+    },
+    "experiment": {
+        "n_test": 1
+    }
+}

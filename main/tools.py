@@ -3,6 +3,7 @@ import numpy as np
 import os
 import json
 import re
+import torch.nn as nn
 # Calculate vectors
 def dv_calculation(v1,v2):
     d1 = len(v1)
@@ -378,3 +379,305 @@ def save_field_result(field,file_name,folder_path = None,if_overwrite = False):
         print("The file already exists.")
     else:
         np.savetxt(path, np.array(field))
+
+def generate_grid_points(resolution, field_min = 0, field_max = 1, device = 'cuda'):
+    x1_list = np.linspace(field_min, field_max, resolution)
+    x2_list = np.linspace(field_min, field_max, resolution)
+    X1,X2 = np.meshgrid(x1_list,x2_list)
+    X_field = torch.tensor(np.concatenate((X1.reshape(-1,1),X2.reshape(-1,1)),
+    axis = 1)).float().to(device)
+    return X_field
+
+def sample_all_boundary(batch_size_BC,field_min = 0, field_max = 1, device = 'cuda'):
+    n00 = torch.tensor([field_min,field_min])
+    n01 = torch.tensor([field_min,field_max])
+    n10 = torch.tensor([field_max,field_min])
+    n11 = torch.tensor([field_max,field_max])
+    X_bot = random_points_1D(int(batch_size_BC),n00,n10, device = device)
+    X_left = random_points_1D(int(batch_size_BC),n00,n01, device = device)
+    X_right = random_points_1D(int(batch_size_BC),n10,n11, device = device)
+    X_top = random_points_1D(int(batch_size_BC),n01,n11, device = device)
+    X_boundaries = torch.cat((X_bot,X_left,X_top,X_right), dim = 0)
+    return X_boundaries
+
+
+class ShiftedLegendrePolynomialBatch(nn.Module):
+    """
+    A PyTorch module that represents a batch of shifted Legendre polynomials
+    up to a specified maximum order on [0,1], along with their derivatives.
+
+    For each order n, the shifted Legendre polynomial is defined as:
+        P_n^shifted(x) = P_n(2x - 1),
+    where P_n is the standard Legendre polynomial on [-1,1].
+
+    Given an input tensor x, the module evaluates all P_n^shifted(x) (now
+    including n=0) and their derivatives for n from 0 to max_order
+    and returns them as tensors.
+    """
+
+    def __init__(self, max_order):
+        """
+        Args:
+            max_order (int): The maximum order of Legendre polynomials to compute (>=1).
+        """
+        super().__init__()
+        if not isinstance(max_order, int) or max_order < 1:
+            raise ValueError("max_order must be an integer >= 1.")
+        self.max_order = max_order
+
+    def forward(self, x):
+        """
+        Evaluate shifted Legendre polynomials up to max_order at points x in [0,1],
+        including the 0th polynomial.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (N,) or (N,1) with values in [0,1].
+
+        Returns:
+            torch.Tensor:
+                Shape (N, max_order+1) containing [P_0^shifted(x), P_1^shifted(x), ..., P_max_order^shifted(x)].
+        """
+        # Ensure x is a 1D tensor
+        if x.dim() == 2 and x.size(1) == 1:
+            x = x.squeeze(1)
+        elif x.dim() != 1:
+            raise ValueError("Input tensor x must be of shape (N,) or (N,1).")
+
+        # Shift x from [0,1] to z in [-1,1]
+        z = 2.0 * x - 1.0  # Shape: (N,)
+
+        # Compute polynomials P_0, P_1, ..., P_max_order
+        P = self._compute_polynomials(z)  # Shape: (N, max_order+1)
+
+        # Return all polynomials, including order 0
+        return P
+
+    def derivative(self, x):
+        """
+        Compute the derivatives of shifted Legendre polynomials up to max_order
+        at points x in [0,1], including the 0th polynomial (which is always zero).
+
+        d/dx [P_n^shifted(x)] = 2 * P_n'(z), where z = 2x - 1.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (N,) or (N,1) with values in [0,1].
+
+        Returns:
+            torch.Tensor:
+                Shape (N, max_order+1) containing the derivatives
+                [dP_0^shifted/dx, dP_1^shifted/dx, ..., dP_max_order^shifted/dx].
+        """
+        # Ensure x is a 1D tensor
+        if x.dim() == 2 and x.size(1) == 1:
+            x = x.squeeze(1)
+        elif x.dim() != 1:
+            raise ValueError("Input tensor x must be of shape (N,) or (N,1).")
+
+        # Shift x from [0,1] to z in [-1,1]
+        z = 2.0 * x - 1.0  # Shape: (N,)
+
+        # Compute all polynomials P0 to P_max_order
+        P = self._compute_polynomials(z)  # Shape: (N, max_order+1)
+
+        # We will build the derivative array as (N, max_order+1).
+        N = z.shape[0]
+        dPdx = torch.zeros(N, self.max_order+1, device=z.device, dtype=z.dtype)
+
+        # For n = 0, derivative is zero. We already initialized to zero.
+        # For n >= 1, use the standard Legendre derivative formula:
+        #   P_n'(z) = n/(1 - z^2) * [z P_n(z) - P_{n-1}(z)],
+        #   then multiply by 2 for d/dx of the shifted polynomial.
+        n = torch.arange(1, self.max_order+1, device=z.device, dtype=z.dtype)  # 1..max_order
+        denominator = 1.0 - z**2 + 1e-9  # avoid divide-by-zero
+        numer = z.unsqueeze(1) * P[:, 1:] - P[:, :-1]  # shape: (N, max_order)
+        dPdz = (n / denominator.unsqueeze(1)) * numer  # shape: (N, max_order)
+
+        # Chain rule: dP_n^shifted/dx = 2 * P_n'(z) for n>=1
+        dPdx[:, 1:] = 2.0 * dPdz
+
+        return - dPdx
+
+    def _compute_polynomials(self, z):
+        """
+        Compute standard Legendre polynomials P0 to P_max_order at points z in [-1,1].
+
+        Uses the recursive relation:
+            P0(z) = 1
+            P1(z) = z
+            (k+1)*P_{k+1}(z) = (2k + 1)*z*P_k(z) - k*P_{k-1}(z)
+
+        Args:
+            z (torch.Tensor): Tensor of shape (N,) with values in [-1,1].
+
+        Returns:
+            torch.Tensor:
+                Tensor of shape (N, max_order+1) containing
+                [P0(z), P1(z), ..., P_max_order(z)].
+        """
+        N = z.shape[0]
+
+        # Initialize with P0(z) = 1, P1(z) = z
+        P_list = [torch.ones_like(z), z.clone()]  # P0, P1
+
+        # Compute P2 to P_max_order using recursion
+        for k in range(1, self.max_order):
+            P_k = P_list[-1]    # P_k(z)
+            P_km1 = P_list[-2]  # P_{k-1}(z)
+            # (k+1) P_{k+1}(z) = (2k+1)*z*P_k(z) - k*P_{k-1}(z)
+            P_kp1 = ((2.0*k + 1.0)*z*P_k - k*P_km1) / (k + 1.0)
+            P_list.append(P_kp1)
+
+        # Stack into shape: (N, max_order+1)
+        P = torch.stack(P_list, dim=1)
+        return P
+
+
+class ShiftedLegendrePolynomial2D(nn.Module):
+    """
+    A PyTorch module for 2D shifted Legendre polynomials on [0,1] x [0,1].
+    The 2D polynomial of orders (m, n) is given by:
+
+        P_{m,n}^{(2D)}(x,y) = P_m^shifted(x) * P_n^shifted(y),
+
+    where each P_k^shifted is the 1D shifted Legendre polynomial
+    (mapped from [0,1] to [-1,1]).
+    """
+
+    def __init__(self, max_order):
+        """
+        Args:
+            max_order (int): The maximum order for the polynomials in x and y.
+        """
+        super().__init__()
+        self.max_order = max_order
+
+        # Re-use the 1D Shifted Legendre class
+        self.legendre_1d = ShiftedLegendrePolynomialBatch(max_order)
+
+    def forward(self, x, y):
+        """
+        Compute 2D shifted Legendre polynomials up to (max_order, max_order),
+        including the 0th polynomial in each dimension.
+
+        Args:
+            x (torch.Tensor): Shape (N,) or (N, 1), values in [0,1].
+            y (torch.Tensor): Shape (N,) or (N, 1), values in [0,1].
+
+        Returns:
+            polynomials_2d (torch.Tensor):
+                By default here, we return shape (N, (max_order+1)*(max_order+1)),
+                which includes orders from (0,0) through (max_order, max_order).
+        """
+        # Get 1D polynomials for x and y (including the 0th term).
+        Px = self.legendre_1d(x)  # shape: (N, max_order+1)
+        Py = self.legendre_1d(y)  # shape: (N, max_order+1)
+
+        # Outer product for each sample => shape: (N, max_order+1, max_order+1)
+        Px_expanded = Px.unsqueeze(2)  # (N, max_order+1, 1)
+        Py_expanded = Py.unsqueeze(1)  # (N, 1, max_order+1)
+        polynomials_2d = Px_expanded * Py_expanded  # (N, max_order+1, max_order+1)
+
+        # Optionally flatten to (N, (max_order+1)*(max_order+1))
+        polynomials_2d = polynomials_2d.reshape(-1, (self.max_order+1)*(self.max_order+1))
+        return polynomials_2d
+
+    def derivatives(self, x, y):
+        """
+        Compute partial derivatives of the 2D polynomials wrt x and y:
+            d/dx [P_m^shifted(x) * P_n^shifted(y)] = (d/dx P_m^shifted(x)) * P_n^shifted(y)
+            d/dy [P_m^shifted(x) * P_n^shifted(y)] = P_m^shifted(x) * (d/dy P_n^shifted(y))
+
+        Args:
+            x, y (torch.Tensor): same shape constraints as forward().
+
+        Returns:
+            d2d_dx (torch.Tensor): shape (N, (max_order+1)*(max_order+1))
+            d2d_dy (torch.Tensor): shape (N, (max_order+1)*(max_order+1))
+        """
+        # Evaluate 1D polynomials and derivatives (including 0th).
+        Px = self.legendre_1d(x)         # (N, max_order+1)
+        Py = self.legendre_1d(y)         # (N, max_order+1)
+        dPx = self.legendre_1d.derivative(x)  # (N, max_order+1)
+        dPy = self.legendre_1d.derivative(y)  # (N, max_order+1)
+
+        # Compute partial wrt x:
+        #   d/dx [Px(i,m)*Py(i,n)] = dPx(i,m) * Py(i,n)
+        dPx_expanded = dPx.unsqueeze(2)  # (N, max_order+1, 1)
+        Py_expanded  = Py.unsqueeze(1)   # (N, 1, max_order+1)
+        d2d_dx = dPx_expanded * Py_expanded  # (N, max_order+1, max_order+1)
+
+        # Compute partial wrt y:
+        #   d/dy [Px(i,m)*Py(i,n)] = Px(i,m) * dPy(i,n)
+        Px_expanded  = Px.unsqueeze(2)   # (N, max_order+1, 1)
+        dPy_expanded = dPy.unsqueeze(1)  # (N, 1, max_order+1)
+        d2d_dy = Px_expanded * dPy_expanded  # (N, max_order+1, max_order+1)
+
+        # Flatten both
+        d2d_dx = d2d_dx.reshape(-1, (self.max_order+1)*(self.max_order+1))
+        d2d_dy = d2d_dy.reshape(-1, (self.max_order+1)*(self.max_order+1))
+
+        return d2d_dx, d2d_dy
+
+
+
+def test_derivatives_2d():
+    """
+    Compare the partial derivatives from the 'model.derivatives(...)'
+    to those obtained via PyTorch autograd.
+    """
+    # 1. Create some example data
+    torch.manual_seed(0)
+    N = 5
+    max_order = 3
+    x = torch.rand(N, requires_grad=True)
+    y = torch.rand(N, requires_grad=True)
+
+    # 2. Instantiate the model
+    model_2d = ShiftedLegendrePolynomial2D(max_order)
+
+    # 3. Get the polynomials => shape (N, (max_order+1)^2)
+    poly_2d = model_2d(x, y)
+
+    # 4. We'll form a random linear combination of these polynomials to get a scalar function
+    #    f_i = sum_{j}( random_coeffs[j] * poly_2d[i,j] )
+    #    Then the partial derivative wrt x_i is sum_{j}( random_coeffs[j] * d/dx [poly_2d[i,j]] ).
+    #    We'll compare that to autograd.
+    coeffs = torch.randn(( (max_order+1)*(max_order+1), ), requires_grad=False)
+
+    # f shape => (N,)
+    f = (poly_2d * coeffs).sum(dim=1)  # sum_j [ poly_2d[i,j]*coeffs[j] ]
+
+    # 5. Now do autograd: partial f wrt x => df_dx, partial f wrt y => df_dy
+    #    Using `torch.autograd.grad`, we can get per-sample gradients.
+    #    However, note that grad outputs are typically aggregated; we'll pass `grad_outputs=torch.ones_like(f)`
+    #    so it does a vector-Jacobian product that yields shape (N,) for each partial.
+    df_dx, df_dy = torch.autograd.grad(
+        f, 
+        [x, y],
+        grad_outputs=torch.ones_like(f),
+        create_graph=True
+    )  # each is shape (N,)
+
+    # 6. Compare with the model's own partial derivatives
+    #    shape => d2d_dx, d2d_dy are (N, (max_order+1)^2)
+    d2d_dx, d2d_dy = model_2d.derivatives(x, y)
+
+    # The partial derivative wrt x of f_i is the dot-product
+    #   sum_j[ d2d_dx[i, j] * coeffs[j] ]
+    # Similarly for y.
+    # => shape (N,)
+    dx_dot = (d2d_dx * coeffs).sum(dim=1)
+    dy_dot = (d2d_dy * coeffs).sum(dim=1)
+
+    # 7. Print or compare the results
+    print("AutoGrad partial wrt x:", df_dx)
+    print("Analytic partial wrt x:", dx_dot)
+    print("Difference (x):", (df_dx - dx_dot).abs().max().item())
+
+    print("AutoGrad partial wrt y:", df_dy)
+    print("Analytic partial wrt y:", dy_dot)
+    print("Difference (y):", (df_dy - dy_dot).abs().max().item())
+
+# Run the test
+if __name__ == "__main__":
+    test_derivatives_2d()
